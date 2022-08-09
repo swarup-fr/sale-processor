@@ -31,7 +31,7 @@ public class SaleMessageConsumerService implements Runnable {
 			IMessage message;
 			int saleMessageCount=0;
 			Map<String,List<Sale>> saleItems = new HashMap<String,List<Sale>>();
-			List<SaleAdjustment> saleAdjustments = new ArrayList<SaleAdjustment>();
+			List<String> saleAdjustments = new ArrayList<String>();
 			BlockingQueue<SaleAdjustment> salesAdjustmentBackoutMessagesQueue = new LinkedBlockingDeque<SaleAdjustment>();
 			
 			while(true) {
@@ -39,18 +39,7 @@ public class SaleMessageConsumerService implements Runnable {
 						message = salesMessagesQueue.take();
 						saleMessageCount++;
 						if(message instanceof SaleAdjustment) {
-							SaleAdjustment saleAdjustment = (SaleAdjustment) message;
-							
-							//if all messages received till now are of Adjustment then do not process them and 
-							//move them to back out queue to process later based on requirement.
-							if(saleItems.isEmpty()) {
-								salesAdjustmentBackoutMessagesQueue.add(saleAdjustment);
-								continue;
-							}
-							saleAdjustments.add(saleAdjustment);
-							List<Sale> saleList = saleItems.get(saleAdjustment.getProduct());
-							applyAdjustment(saleAdjustment,saleList);
-							
+							handleSaleAdjustment(message, saleItems, saleAdjustments, salesAdjustmentBackoutMessagesQueue);
 						}else if(message instanceof SaleOccurence){
 							handleSaleOccurence(message, saleItems);
 						}else if(message instanceof Sale) {
@@ -62,8 +51,10 @@ public class SaleMessageConsumerService implements Runnable {
 						}
 				}
 				else if(saleMessageCount==MAX_SALE_COUNT) {
-					SaleLogger.LOGGER.info("--------------------- Generating Final Report ------------------------------");
+					SaleLogger.LOGGER.info("--------------------- Generating Report of Adjustments------------------------------");
 					generateAdjustmentsReport(saleAdjustments);
+					SaleLogger.LOGGER.info("--------------------- Generating Report of Total Sale per Product------------------------------");
+					generateIntermidiateReport(saleItems);
 					SaleLogger.LOGGER.info("Total messages processed : "+saleMessageCount);
 					break;
 				}
@@ -75,9 +66,23 @@ public class SaleMessageConsumerService implements Runnable {
 		}
 	}
 
+	private void handleSaleAdjustment(IMessage message, Map<String, List<Sale>> saleItems,
+			List<String> saleAdjustments, BlockingQueue<SaleAdjustment> salesAdjustmentBackoutMessagesQueue) {
+		SaleAdjustment saleAdjustment = (SaleAdjustment) message;
+		
+		//if all messages received till now are of Adjustment then do not process them and 
+		//move them to back out queue to process later based on requirement.
+		if(saleItems.isEmpty()) {
+			salesAdjustmentBackoutMessagesQueue.add(saleAdjustment);
+		}else {
+			List<Sale> saleList = saleItems.get(saleAdjustment.getProduct());
+			applyAdjustment(saleAdjustment,saleList,saleAdjustments);
+		}
+	}
+
 	private void handleTenthRecordReport(Map<String, List<Sale>> saleItems,
 			BlockingQueue<SaleAdjustment> salesAdjustmentBackoutMessagesQueue) {
-		SaleLogger.LOGGER.info("--------------------- Generating Intermidiate Report ------------------------------");
+		SaleLogger.LOGGER.info("--------------------- Generating Intermediate(10th message) Report ------------------------------");
 		if(null!=saleItems && !saleItems.isEmpty())
 			generateIntermidiateReport(saleItems);
 		else if (!salesAdjustmentBackoutMessagesQueue.isEmpty())
@@ -116,21 +121,24 @@ public class SaleMessageConsumerService implements Runnable {
 		}
 	}
 	
-	private void applyAdjustment(SaleAdjustment saleAdjustment, List<Sale> saleList) {
+	private void applyAdjustment(SaleAdjustment saleAdjustment, List<Sale> saleList,List<String> saleAdjustments) {
 		
 		switch(saleAdjustment.getAdjustmentOperation()) {
 		
 			case ADD : 		saleList.forEach(sale -> {
 								sale.setValue(saleAdjustment.getAdjustmentOperation().apply(sale.getValue(),saleAdjustment.getValue()));
+								saleAdjustments.add("Sale of porduct type = "+sale.getProduct()+" of value= "+sale.getValue()+" is adjusted with "+saleAdjustment.getAdjustmentOperation()+" operation, with amount "+saleAdjustment.getValue());
 							});
 							break;
 			case SUBTRACT : saleList.forEach(sale -> {
 								sale.setValue(saleAdjustment.getAdjustmentOperation().apply(sale.getValue(),saleAdjustment.getValue()));
+								saleAdjustments.add("Sale of porduct type = "+sale.getProduct()+" of value= "+sale.getValue()+" is adjusted with "+saleAdjustment.getAdjustmentOperation()+" operation, with amount "+saleAdjustment.getValue());
 							});
 							break;
 				
 			case MULTIPLY : saleList.forEach(sale -> {
 								sale.setValue(saleAdjustment.getAdjustmentOperation().apply(sale.getValue(),saleAdjustment.getValue()));
+								saleAdjustments.add("Sale of porduct type = "+sale.getProduct()+" of value= "+sale.getValue()+" is adjusted with "+saleAdjustment.getAdjustmentOperation()+" operation, with amount "+saleAdjustment.getValue());
 							});
 							break;
 			default : SaleLogger.LOGGER.info("Invalid Adjustment operation "+saleAdjustment.getAdjustmentOperation()+" for product "+saleAdjustment.getProduct());
@@ -145,9 +153,9 @@ public class SaleMessageConsumerService implements Runnable {
 		}
 	}
 	
-	private void generateAdjustmentsReport(List<SaleAdjustment> saleAdjustments) {
+	private void generateAdjustmentsReport(List<String> saleAdjustments) {
 		saleAdjustments.forEach(saleAdjustment -> {
-			SaleLogger.LOGGER.info("Adjustment operation "+saleAdjustment.getAdjustmentOperation()+" has been performed for product = "+saleAdjustment.getProduct()+" with value = "+saleAdjustment.getValue());
+			SaleLogger.LOGGER.info(saleAdjustment);
 		});
 		
 	}
