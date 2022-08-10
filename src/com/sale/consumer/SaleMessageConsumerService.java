@@ -54,7 +54,7 @@ public class SaleMessageConsumerService implements Runnable {
 					SaleLogger.LOGGER.info("--------------------- Generating Report of Adjustments------------------------------");
 					generateAdjustmentsReport(saleAdjustments);
 					SaleLogger.LOGGER.info("--------------------- Generating Report of Total Sale per Product------------------------------");
-					generateIntermidiateReport(saleItems);
+					generateReport(saleItems);
 					SaleLogger.LOGGER.info("Total messages processed : "+saleMessageCount);
 					break;
 				}
@@ -84,7 +84,7 @@ public class SaleMessageConsumerService implements Runnable {
 			BlockingQueue<SaleAdjustment> salesAdjustmentBackoutMessagesQueue) {
 		SaleLogger.LOGGER.info("--------------------- Generating Intermediate(10th message) Report ------------------------------");
 		if(null!=saleItems && !saleItems.isEmpty())
-			generateIntermidiateReport(saleItems);
+			generateReport(saleItems);
 		else if (!salesAdjustmentBackoutMessagesQueue.isEmpty())
 			SaleLogger.LOGGER.info("All the messages received till now are of Sale Adjustment.");
 		
@@ -146,7 +146,7 @@ public class SaleMessageConsumerService implements Runnable {
 		
 	}
 
-	private void generateIntermidiateReport(Map<String,List<Sale>> saleItems) {
+	private void generateReport(Map<String,List<Sale>> saleItems) {
 		for(Map.Entry<String, List<Sale>> saleEntry : saleItems.entrySet()) {
 			BigDecimal totalSaleForProduct = saleEntry.getValue().parallelStream().map(Sale::getValue).reduce(BigDecimal.ZERO,BigDecimal::add);
 			SaleLogger.LOGGER.info("Total Sale for "+saleEntry.getKey()+" is "+totalSaleForProduct);
